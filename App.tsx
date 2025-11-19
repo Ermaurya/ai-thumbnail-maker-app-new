@@ -1,9 +1,10 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { Header } from './components/Header';
 import { InputForm } from './components/InputForm';
 import { ThumbnailDisplay } from './components/ThumbnailDisplay';
 import { generateThumbnail } from './services/geminiService';
-import type { ImageData } from './types';
+import type { ImageData, Preset } from './types';
 
 const loadingMessages = [
     "Warming up the AI's creative circuits...",
@@ -75,10 +76,35 @@ export default function App() {
     const [headshot, setHeadshot] = useState<ImageData | null>(null);
     const [originalFile, setOriginalFile] = useState<File | null>(null);
     const [aspectRatio, setAspectRatio] = useState<string>('16:9');
+    const [style, setStyle] = useState<string>('Vibrant');
+    
+    // Text Effects State
+    const [textEffect, setTextEffect] = useState<string>('Outline');
+
+    // Border State
+    const [borderEnabled, setBorderEnabled] = useState<boolean>(false);
+    const [borderColor, setBorderColor] = useState<string>('#FFFFFF');
+    const [borderThickness, setBorderThickness] = useState<string>('Medium');
+
+    // Presets State
+    const [presets, setPresets] = useState<Preset[]>([]);
+
     const [generatedThumbnail, setGeneratedThumbnail] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState<boolean>(false);
     const [error, setError] = useState<string | null>(null);
     const [currentLoadingMessage, setCurrentLoadingMessage] = useState<string>(loadingMessages[0]);
+
+    useEffect(() => {
+        // Load presets from localStorage on mount
+        const savedPresets = localStorage.getItem('thumbnailPresets');
+        if (savedPresets) {
+            try {
+                setPresets(JSON.parse(savedPresets));
+            } catch (e) {
+                console.error("Failed to parse presets from local storage", e);
+            }
+        }
+    }, []);
 
     useEffect(() => {
         let interval: number;
@@ -124,6 +150,41 @@ export default function App() {
         }
     };
 
+    const handleSavePreset = (name: string) => {
+        const newPreset: Preset = {
+            id: Date.now().toString(),
+            name,
+            aspectRatio,
+            style,
+            textEffect,
+            borderEnabled,
+            borderColor,
+            borderThickness
+        };
+        const updatedPresets = [...presets, newPreset];
+        setPresets(updatedPresets);
+        localStorage.setItem('thumbnailPresets', JSON.stringify(updatedPresets));
+    };
+
+    const handleLoadPreset = (preset: Preset) => {
+        setAspectRatio(preset.aspectRatio);
+        setStyle(preset.style);
+        setTextEffect(preset.textEffect || 'None'); // Fallback for old presets
+        setBorderEnabled(preset.borderEnabled);
+        setBorderColor(preset.borderColor);
+        setBorderThickness(preset.borderThickness);
+        // We trigger aspect ratio change logic to re-process the image if needed
+        if (originalFile && preset.aspectRatio !== aspectRatio) {
+            handleAspectRatioChange(preset.aspectRatio);
+        }
+    };
+
+    const handleDeletePreset = (id: string) => {
+        const updatedPresets = presets.filter(p => p.id !== id);
+        setPresets(updatedPresets);
+        localStorage.setItem('thumbnailPresets', JSON.stringify(updatedPresets));
+    };
+
     const handleGenerate = useCallback(async () => {
         if (!videoTitle || !headshot) {
             setError('Please provide both a video title and a headshot.');
@@ -135,7 +196,17 @@ export default function App() {
         setGeneratedThumbnail(null);
 
         try {
-            const thumbnailBase64 = await generateThumbnail(videoTitle, headshot.base64, headshot.mimeType, aspectRatio);
+            const thumbnailBase64 = await generateThumbnail(
+                videoTitle, 
+                headshot.base64, 
+                headshot.mimeType, 
+                aspectRatio, 
+                style,
+                textEffect,
+                borderEnabled,
+                borderColor,
+                borderThickness
+            );
             setGeneratedThumbnail(thumbnailBase64);
         } catch (err: any) {
             console.error(err);
@@ -144,7 +215,7 @@ export default function App() {
         } finally {
             setIsLoading(false);
         }
-    }, [videoTitle, headshot, aspectRatio]);
+    }, [videoTitle, headshot, aspectRatio, style, textEffect, borderEnabled, borderColor, borderThickness]);
 
     return (
         <div className="min-h-screen bg-gray-900 font-sans text-white">
@@ -159,6 +230,20 @@ export default function App() {
                             onImageChange={handleImageChange}
                             aspectRatio={aspectRatio}
                             onAspectRatioChange={handleAspectRatioChange}
+                            style={style}
+                            onStyleChange={setStyle}
+                            textEffect={textEffect}
+                            onTextEffectChange={setTextEffect}
+                            borderEnabled={borderEnabled}
+                            onBorderEnabledChange={setBorderEnabled}
+                            borderColor={borderColor}
+                            onBorderColorChange={setBorderColor}
+                            borderThickness={borderThickness}
+                            onBorderThicknessChange={setBorderThickness}
+                            presets={presets}
+                            onSavePreset={handleSavePreset}
+                            onLoadPreset={handleLoadPreset}
+                            onDeletePreset={handleDeletePreset}
                             onSubmit={handleGenerate}
                             isLoading={isLoading}
                         />
