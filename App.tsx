@@ -191,6 +191,22 @@ export default function App() {
             return;
         }
 
+        // API Key Selection Handling for AI Studio Environment
+        if ((window as any).aistudio) {
+            try {
+                const hasKey = await (window as any).aistudio.hasSelectedApiKey();
+                if (!hasKey) {
+                    const success = await (window as any).aistudio.openSelectKey();
+                    if (!success) {
+                        setError("An API Key must be selected to generate images.");
+                        return;
+                    }
+                }
+            } catch (e) {
+                console.warn("Failed to check/select API key via window.aistudio", e);
+            }
+        }
+
         setIsLoading(true);
         setError(null);
         setGeneratedThumbnail(null);
